@@ -1,6 +1,7 @@
 package com.ekkelenkamp.netatmo2wow;
 
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
 
 import javax.net.ssl.*;
 import java.io.*;
@@ -15,9 +16,9 @@ import java.util.Map;
 
 public class NetatmoHttpClientImpl implements NetatmoHttpClient {
 
-    final static Logger logger = Logger.getLogger(NetatmoHttpClientImpl.class);
+    static final Logger logger = LogManager.getLogger(NetatmoHttpClientImpl.class);
 
-    final static String USER_AGENT = "Java Netatmo Importer";
+    static final String USER_AGENT = "Java Netatmo Importer";
 
     private void NetatmoHttpClient() {
     }

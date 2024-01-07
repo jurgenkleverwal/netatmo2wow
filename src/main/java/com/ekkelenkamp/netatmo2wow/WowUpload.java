@@ -1,7 +1,8 @@
 package com.ekkelenkamp.netatmo2wow;
 
 import com.ekkelenkamp.netatmo2wow.model.Measures;
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -35,14 +36,13 @@ public class WowUpload {
 
     public static final String WOW_URL = "http://wow.metoffice.gov.uk/automaticreading?";
 
-    private static final Logger log = Logger.getLogger(WowUpload.class);
+    private static final Logger log = LogManager.getLogger(WowUpload.class);
 
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd'%20'HH'%3A'mm'%3A'ss");
 
     private int connectionTimeout = 60000;
     private int readTimeout = 60000;
     private long previousTimeStep;
-    private int awsPin = -1;
     private String softwareType = Info.SOFTWARE_NAME + " " + Info.SOFTWARE_VERSION;
 
     public WowUpload(long previousTimeStep) {
@@ -64,7 +64,7 @@ public class WowUpload {
         long lastUpload = previousTimeStep;
         int numberOfSuccesfulUploads = 0;
         
-        if (measures.size() > 0)
+        if (!measures.isEmpty())
         {        
 	        Double accumuledRain = measures.get(measures.size()-1).getRainAccumulated();
 	        for (Measures measure : measures) 

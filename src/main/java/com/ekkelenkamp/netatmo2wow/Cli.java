@@ -10,10 +10,10 @@ import java.util.prefs.Preferences;
 
 public class Cli {
 
-    final static org.apache.log4j.Logger logger = org.apache.log4j.Logger.getLogger(Cli.class);
+    static final org.apache.logging.log4j.Logger logger = org.apache.logging.log4j.LogManager.getLogger(Cli.class);
     private String[] args = null;
     private Options options = new Options();
-    private CommandLineParser parser = new BasicParser();
+    private CommandLineParser parser = new DefaultParser();
     private CommandLine cmd = null;
     private NetatmoHttpClient netatmoHttpClient = new NetatmoHttpClientImpl();
 
@@ -24,7 +24,6 @@ public class Cli {
         option.setRequired(false);
         options.addOption(option);
 
-        OptionGroup group = new OptionGroup();
         option = new Option("c", "clientid", true, "Client id of netatmo application. See: https://dev.netatmo.com/dev/createapp");
         option.setRequired(false);
         options.addOption(option);
@@ -55,6 +54,9 @@ public class Cli {
         option.setRequired(false);
         options.addOption(option);
 
+        option = new Option("o", "access_token", true, "Access token of netatmo application.");
+        option.setRequired(false);
+        options.addOption(option);
     }
 
     public void parse() {
@@ -88,12 +90,11 @@ public class Cli {
 
         logger.debug("Previous time was: " + new java.util.Date(previousTimestepRead));
         NetatmoDownload download = new NetatmoDownload(netatmoHttpClient);
-        WowUpload upload = new WowUpload(previousTimestepRead);
         try 
         {
-            List<Measures> measures = download.downloadMeasures(cmd.getOptionValue("e"), cmd.getOptionValue("p"), cmd.getOptionValue("c"), cmd.getOptionValue("s"), cmd.getOptionValue("t"));
+            List<Measures> measures = download.downloadMeasures(cmd.getOptionValue("e"), cmd.getOptionValue("p"), cmd.getOptionValue("c"), cmd.getOptionValue("s"), cmd.getOptionValue("t"), cmd.getOptionValue("o"));
             logger.info("Number of Netatmo measurements read: " + measures.size());
-            if (measures.size() > 0) 
+            if (!measures.isEmpty()) 
             {
                 logger.debug("First measurement: " + measures.get(0));
                 logger.debug("Last measurement: " + measures.get(measures.size() - 1));

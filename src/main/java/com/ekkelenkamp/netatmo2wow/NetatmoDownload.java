@@ -2,7 +2,9 @@ package com.ekkelenkamp.netatmo2wow;
 
 import com.ekkelenkamp.netatmo2wow.model.Device;
 import com.ekkelenkamp.netatmo2wow.model.Measures;
-import org.apache.log4j.Logger;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
@@ -13,26 +15,28 @@ import java.util.*;
 
 public class NetatmoDownload {
 
-    private NetatmoHttpClient netatmoHttpClient;
 
-    final static Logger logger = Logger.getLogger(NetatmoDownload.class);
-    final static long TIME_STEP_TOLERANCE = 2 * 60 * 1000;
+	private NetatmoHttpClient netatmoHttpClient;
+
+    static final Logger logger = LogManager.getLogger(NetatmoDownload.class);
+    static final long TIME_STEP_TOLERANCE = 2 * 60 * 1000;
 
     // API URLs that will be used for requests, see: http://dev.netatmo.com/doc/restapi.
-    protected final String URL_BASE = "https://api.netatmo.net";
-    protected final String URL_REQUEST_TOKEN = URL_BASE + "/oauth2/token";
-    //protected final String URL_GET_DEVICES_LIST = URL_BASE + "/api/devicelist";
-    protected final String URL_GET_MEASURES_LIST = URL_BASE + "/api/getmeasure";
-    protected final String URL_GET_STATION_DATA = URL_BASE + "/api/getstationsdata";
+    protected static final String URL_BASE = "https://api.netatmo.net";
+    protected static final String URL_REQUEST_TOKEN = URL_BASE + "/oauth2/token";
+    //protected static final String URL_GET_DEVICES_LIST = URL_BASE + "/api/devicelist";
+    protected static final String URL_GET_MEASURES_LIST = URL_BASE + "/api/getmeasure";
+    protected static final String URL_GET_STATION_DATA = URL_BASE + "/api/getstationsdata";
+    protected static final String DEFAULT_REDIRECT_URI = "http://localhost:8080";
 
     public NetatmoDownload(NetatmoHttpClient netatmoHttpClient) {
         this.netatmoHttpClient = netatmoHttpClient;
     }
 
-    public List<Measures> downloadMeasures(String username, String password, String clientId, String clientSecret, String timespan) throws IOException {
-        String url = URL_REQUEST_TOKEN;
-        String token = login(username, password, clientId, clientSecret);
-        logger.debug("Token: " + token);
+    public List<Measures> downloadMeasures(String username, String password, String clientId, String clientSecret, String timespan, String accessToken) throws IOException {
+        if(accessToken == null || accessToken.isEmpty())
+        	accessToken = login(username, password, clientId, clientSecret);
+        logger.debug("Access Token: " + accessToken);
         
         String scale = "max";
         long timePeriod = Long.parseLong(timespan);
@@ -42,14 +46,14 @@ public class NetatmoDownload {
         logger.debug("start time: " + new Date(currentDate * 1000));
         logger.debug("start time seconds: " + currentDate);
         
-        Device device = getDevices(token);
+        Device device = getDevices(accessToken);
         List<Measures> measures = new ArrayList<Measures>();       
         Map<String, List<String>> devices = device.getDevices();
         
         Double accumulatedRain = 0.0;
         for (String dev : devices.keySet()) 
         {
-        	measures.addAll(getMeasures(token, dev, null, "Pressure" , scale, currentDate, ""));
+        	measures.addAll(getMeasures(accessToken, dev, null, "Pressure" , scale, currentDate, ""));
             List<String> modules = devices.get(dev);
             
             for (String module : modules) 
@@ -62,15 +66,15 @@ public class NetatmoDownload {
                 if (moduleMeasureTypes.equals("Rain"))
                 {
                     List<Measures> accumRain = 
-                    		getMeasures(token, dev, module, "sum_rain", "1day", currentDate, "last");
+                    		getMeasures(accessToken, dev, module, "sum_rain", "1day", currentDate, "last");
                     
-                    if (accumRain.size() > 0)
+                    if (!accumRain.isEmpty())
                     {
                     	accumulatedRain = accumRain.get(0).getRainAccumulated();
                     }
                 }
 
-                List<Measures> newMeasures = getMeasures(token, dev, module, moduleMeasureTypes, scale, currentDate, "");
+                List<Measures> newMeasures = getMeasures(accessToken, dev, module, moduleMeasureTypes, scale, currentDate, "");
                 measures = mergeMeasures(measures, newMeasures, TIME_STEP_TOLERANCE);
             }
         }
@@ -78,7 +82,7 @@ public class NetatmoDownload {
         Collections.sort(measures);
         calculateAccumulativeRainfail(measures);
         
-        if (measures.size() > 0)
+        if (!measures.isEmpty())
         {
         	measures.get(measures.size() - 1).setRainAccumulated(accumulatedRain);
         }
@@ -125,7 +129,6 @@ public class NetatmoDownload {
 
         List<Measures> result = new ArrayList<Measures>();
 
-        List<Measures> newMeasures = new ArrayList<Measures>();
         for (Measures n : newMeasuresList) 
         {
             boolean mergedMeasure = false;
@@ -237,7 +240,7 @@ public class NetatmoDownload {
             JSONObject jsonResult = (JSONObject) obj;
             JSONObject body = (JSONObject) jsonResult.get("body");
             JSONArray devices = (JSONArray) body.get("devices");
-            if (devices.size() > 0)
+            if (!devices.isEmpty())
             {            	
             	JSONObject firstDevice = (JSONObject) devices.get(0);            
             	String deviceId = (String) firstDevice.get("_id");            	
@@ -248,7 +251,7 @@ public class NetatmoDownload {
             		JSONObject module = (JSONObject) modules.get(i);
             		String moduleId = (String) module.get("_id");
             		JSONArray dataTypes = (JSONArray) module.get("data_type");
-            		if (dataTypes.size() > 0) 
+            		if (!dataTypes.isEmpty()) 
             		{
             			String joinedDataTypes = String.join(",", dataTypes);  
             			if (joinedDataTypes.equals("Wind"))
