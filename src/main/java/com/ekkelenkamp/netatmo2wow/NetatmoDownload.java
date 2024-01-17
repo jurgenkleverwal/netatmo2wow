@@ -12,11 +12,15 @@ import org.json.simple.parser.JSONParser;
 import java.io.IOException;
 import java.net.URL;
 import java.util.*;
+import java.util.Map.Entry;
 
 public class NetatmoDownload {
 
 
 	private NetatmoHttpClient netatmoHttpClient;
+	private NetatmoTokenFiles netatmoTokenFiles;
+	private String clientId;
+	private String clientSecret;
 
     static final Logger logger = LogManager.getLogger(NetatmoDownload.class);
     static final long TIME_STEP_TOLERANCE = 2 * 60 * 1000;
@@ -27,16 +31,15 @@ public class NetatmoDownload {
     //protected static final String URL_GET_DEVICES_LIST = URL_BASE + "/api/devicelist";
     protected static final String URL_GET_MEASURES_LIST = URL_BASE + "/api/getmeasure";
     protected static final String URL_GET_STATION_DATA = URL_BASE + "/api/getstationsdata";
-    protected static final String DEFAULT_REDIRECT_URI = "http://localhost:8080";
 
-    public NetatmoDownload(NetatmoHttpClient netatmoHttpClient) {
+    public NetatmoDownload(NetatmoHttpClient netatmoHttpClient, NetatmoTokenFiles netatmoTokenFiles) {
         this.netatmoHttpClient = netatmoHttpClient;
+        this.netatmoTokenFiles = netatmoTokenFiles;
     }
 
-    public List<Measures> downloadMeasures(String username, String password, String clientId, String clientSecret, String timespan, String accessToken) throws IOException {
-        if(accessToken == null || accessToken.isEmpty())
-        	accessToken = login(username, password, clientId, clientSecret);
-        logger.debug("Access Token: " + accessToken);
+    public List<Measures> downloadMeasures(String clientId, String clientSecret, String timespan) throws IOException {
+    	this.clientId = clientId;
+    	this.clientSecret = clientSecret;
         
         String scale = "max";
         long timePeriod = Long.parseLong(timespan);
@@ -46,15 +49,18 @@ public class NetatmoDownload {
         logger.debug("start time: " + new Date(currentDate * 1000));
         logger.debug("start time seconds: " + currentDate);
         
-        Device device = getDevices(accessToken);
+        Device device = getDevicesAndRefreskTokenIfNeeded(netatmoTokenFiles.readToken(NetatmoTokenType.ACCESS));
         List<Measures> measures = new ArrayList<Measures>();       
         Map<String, List<String>> devices = device.getDevices();
         
-        Double accumulatedRain = 0.0;
-        for (String dev : devices.keySet()) 
+        String accessToken = netatmoTokenFiles.readToken(NetatmoTokenType.ACCESS);
+    	logger.debug("Access Token: " + accessToken);
+        
+    	Double accumulatedRain = 0.0;
+        for (Entry<String, List<String>> dev : devices.entrySet()) 
         {
-        	measures.addAll(getMeasures(accessToken, dev, null, "Pressure" , scale, currentDate, ""));
-            List<String> modules = devices.get(dev);
+        	measures.addAll(getMeasures(accessToken, dev.getKey(), null, "Pressure" , scale, currentDate, ""));
+            List<String> modules = dev.getValue();
             
             for (String module : modules) 
             {
@@ -66,7 +72,7 @@ public class NetatmoDownload {
                 if (moduleMeasureTypes.equals("Rain"))
                 {
                     List<Measures> accumRain = 
-                    		getMeasures(accessToken, dev, module, "sum_rain", "1day", currentDate, "last");
+                    		getMeasures(accessToken, dev.getKey(), module, "sum_rain", "1day", currentDate, "last");
                     
                     if (!accumRain.isEmpty())
                     {
@@ -74,7 +80,7 @@ public class NetatmoDownload {
                     }
                 }
 
-                List<Measures> newMeasures = getMeasures(accessToken, dev, module, moduleMeasureTypes, scale, currentDate, "");
+                List<Measures> newMeasures = getMeasures(accessToken, dev.getKey(), module, moduleMeasureTypes, scale, currentDate, "");
                 measures = mergeMeasures(measures, newMeasures, TIME_STEP_TOLERANCE);
             }
         }
@@ -226,12 +232,11 @@ public class NetatmoDownload {
         }
     }
 
-    public Device getDevices(String token) {
+    public Device getDevicesAndRefreskTokenIfNeeded(String token) {
         Device device = new Device();
         HashMap<String, String> params = new HashMap<String, String>();
         params.put("access_token",token);
         
-        //List<String> devicesList = new ArrayList<String>();
         try 
         {
             JSONParser parser = new JSONParser();
@@ -239,6 +244,15 @@ public class NetatmoDownload {
             Object obj = parser.parse(result);
             JSONObject jsonResult = (JSONObject) obj;
             JSONObject body = (JSONObject) jsonResult.get("body");
+            if (body == null)
+            {
+            	token = refreshTokens();
+            	params.put("access_token",token);
+            	result = netatmoHttpClient.post(new URL(URL_GET_STATION_DATA), params);
+                obj = parser.parse(result);
+                jsonResult = (JSONObject) obj;
+                body = (JSONObject) jsonResult.get("body");            	
+            }
             JSONArray devices = (JSONArray) body.get("devices");
             if (!devices.isEmpty())
             {            	
@@ -271,28 +285,31 @@ public class NetatmoDownload {
         }
     }
 
-    /**
-     * This is the first request you have to do before being able to use the API.
-     * It allows you to retrieve an access token in one step,
-     * using your application's credentials and the user's credentials.
-     */
-    public String login(String email, String password, String clientId, String clientSecret) {
-        HashMap<String, String> params = new HashMap<String, String>();
-        params.put("grant_type", "password");
+    private String refreshTokens()
+    {
+    	String newAccessToken = null;
+    	String refreshToken = netatmoTokenFiles.readToken(NetatmoTokenType.REFRESH);
+    	HashMap<String, String> params = new HashMap<String, String>();
+        params.put("grant_type", "refresh_token");
+        params.put("refresh_token", refreshToken);
         params.put("client_id", clientId);
         params.put("client_secret", clientSecret);
-        params.put("username", email);
-        params.put("password", password);
-        params.put("scope", "read_station");
         try {
             JSONParser parser = new JSONParser();
             String result = netatmoHttpClient.post(new URL(URL_REQUEST_TOKEN), params);
             Object obj = parser.parse(result);
             JSONObject jsonResult = (JSONObject) obj;
-            String token = (String) jsonResult.get("access_token");
-            return token;
+            newAccessToken = (String) jsonResult.get("access_token");
+            String newRefreshToken = (String) jsonResult.get("refresh_token");
+            Long expiresIn = (Long) jsonResult.get("expires_in");
+            if(newAccessToken != null && !newAccessToken.isEmpty())
+            	netatmoTokenFiles.writeToken(NetatmoTokenType.ACCESS, newAccessToken);
+            if(newRefreshToken != null && !newRefreshToken.isEmpty())
+            	netatmoTokenFiles.writeToken(NetatmoTokenType.REFRESH, newRefreshToken);
+            logger.debug("new access_token expires in " + expiresIn.intValue() + " seconds");
         } catch (Exception e) {
             throw new RuntimeException(e);
-        }
+        }    
+        return newAccessToken;
     }
 }

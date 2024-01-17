@@ -32,19 +32,9 @@ public class Cli {
         option.setRequired(false);
         options.addOption(option);
 
-        option = new Option("e", "email", true, "Email of netatmo account. See: https://auth.netatmo.com/access/signup");
-        option.setRequired(false);
-        options.addOption(option);
-
-        option = new Option("p", "password", true, "Password of netatmo account. See: https://auth.netatmo.com/access/signup");
-        option.setRequired(false);
-        options.addOption(option);
-
-
         option = new Option("t", "timeperiod", true, "timeperiod to retrieve observations from current time minus timeperiod in seconds.");
         option.setRequired(false);
         options.addOption(option);
-
 
         option = new Option("i", "siteid", true, "siteid of the WOW site to upload data to.");
         option.setRequired(false);
@@ -54,7 +44,7 @@ public class Cli {
         option.setRequired(false);
         options.addOption(option);
 
-        option = new Option("o", "access_token", true, "Access token of netatmo application.");
+        option = new Option("l", "token_location", true, "Location to read and write access and refresh tokens");
         option.setRequired(false);
         options.addOption(option);
     }
@@ -89,10 +79,11 @@ public class Cli {
         previousTimestepRead = Long.parseLong(propertyValue);
 
         logger.debug("Previous time was: " + new java.util.Date(previousTimestepRead));
-        NetatmoDownload download = new NetatmoDownload(netatmoHttpClient);
+        NetatmoTokenFiles netatmoTokenFiles = new NetatmoTokenFiles(cmd.getOptionValue("l"));
+        NetatmoDownload download = new NetatmoDownload(netatmoHttpClient, netatmoTokenFiles);
         try 
         {
-            List<Measures> measures = download.downloadMeasures(cmd.getOptionValue("e"), cmd.getOptionValue("p"), cmd.getOptionValue("c"), cmd.getOptionValue("s"), cmd.getOptionValue("t"), cmd.getOptionValue("o"));
+            List<Measures> measures = download.downloadMeasures(cmd.getOptionValue("c"), cmd.getOptionValue("s"), cmd.getOptionValue("t"));
             logger.info("Number of Netatmo measurements read: " + measures.size());
             if (!measures.isEmpty()) 
             {
