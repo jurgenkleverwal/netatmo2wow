@@ -8,6 +8,7 @@ import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
 import java.security.cert.X509Certificate;
@@ -16,16 +17,20 @@ import java.util.Map;
 
 public class NetatmoHttpClientImpl implements NetatmoHttpClient {
 
-    static final Logger logger = LogManager.getLogger(NetatmoHttpClientImpl.class);
+	static final Logger logger = LogManager.getLogger(NetatmoHttpClientImpl.class);
 
     static final String USER_AGENT = "Java Netatmo Importer";
 
-    private void NetatmoHttpClient() {
+    @SuppressWarnings("unused")
+	private void NetatmoHttpClient() {
+    	// Empty constructor
     }
 
     static String convertStreamToString(java.io.InputStream is) {
-        java.util.Scanner s = new java.util.Scanner(is).useDelimiter("\\A");
-        return s.hasNext() ? s.next() : "";
+        try(java.util.Scanner s = new java.util.Scanner(is).useDelimiter("\\A"))
+        {
+        	return s.hasNext() ? s.next() : "";
+        }
     }
 
     @Override
@@ -35,29 +40,31 @@ public class NetatmoHttpClientImpl implements NetatmoHttpClient {
         final TrustManager[] trustAllCerts = new TrustManager[]{new X509TrustManager() {
             @Override
             public void checkClientTrusted(final X509Certificate[] chain, final String authType) {
+            	// Unused method
             }
 
             @Override
             public void checkServerTrusted(final X509Certificate[] chain, final String authType) {
+            	// Unused method
             }
 
             @Override
             public X509Certificate[] getAcceptedIssuers() {
-                return null;
+                return new X509Certificate[0];
             }
         }};
 
         // Install the all-trusting trust manager
-        final SSLContext sslContext = SSLContext.getInstance("SSL");
+        final SSLContext sslContext = SSLContext.getInstance("TLSv1.2");
         sslContext.init(null, trustAllCerts, new java.security.SecureRandom());
         // Create an ssl socket factory with our all-trusting manager
         final SSLSocketFactory sslSocketFactory = sslContext.getSocketFactory();
 
-        URL URL_OBJECT = url;
-        final HttpURLConnection connection = (HttpURLConnection) URL_OBJECT.openConnection();
+        URL urlObject = url;
+        final HttpURLConnection connection = (HttpURLConnection) urlObject.openConnection();
         if (connection instanceof HttpsURLConnection) {
-            HttpsURLConnection connection_https = (HttpsURLConnection) connection;
-            connection_https.setSSLSocketFactory(sslSocketFactory);
+            HttpsURLConnection connectionHttps = (HttpsURLConnection) connection;
+            connectionHttps.setSSLSocketFactory(sslSocketFactory);
 
         }
         connection.setDefaultUseCaches(false);
@@ -71,19 +78,14 @@ public class NetatmoHttpClientImpl implements NetatmoHttpClient {
         applyParams(connection, params);
         try {
             final int http_code = connection.getResponseCode();
-            try {
-                if (http_code == 200) { /* good code */
-                    String response = readStream(connection.getInputStream());
-                    connection.disconnect();
-                    return response;
-                } else { /* error code*/
-                    String response = readStream(connection.getErrorStream());
-                    connection.disconnect();
-                    return response;
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
-                return null;
+            if (http_code == 200) { /* good code */
+                String response = readStream(connection.getInputStream());
+                connection.disconnect();
+                return response;
+            } else { /* error code*/
+                String response = readStream(connection.getErrorStream());
+                connection.disconnect();
+                return response;
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -92,32 +94,24 @@ public class NetatmoHttpClientImpl implements NetatmoHttpClient {
     }
 
     private String readStream(InputStream in) {
-        final String M = "readStream: ";
         String rv = null;
         StringBuilder sb = new StringBuilder();
-        BufferedReader reader = null;
-        try {
-            reader = new BufferedReader(new InputStreamReader(in));
+        try(BufferedReader reader = new BufferedReader(new InputStreamReader(in))) {
             String line = "";
             while ((line = reader.readLine()) != null) sb.append(line);
             rv = sb.toString();
         } catch (Exception e) {
             e.printStackTrace();
         }
-        try {
-            reader.close();
-        } catch (Exception ee) {
-            ee.printStackTrace();
-        }
         return rv;
     }
 
-    private boolean applyParams(HttpURLConnection connection, Map<String, String> params_hash) {
+    private boolean applyParams(HttpURLConnection connection, Map<String, String> paramsHash) {
         try {
-            String params = createParamsLine(params_hash);
-            logger.debug("url: " + connection.getURL() + "?" + params);
+            String params = createParamsLine(paramsHash);
+            logger.debug("url: {}?{}", connection.getURL(), params);
             OutputStream os = connection.getOutputStream();
-            BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(os, "UTF-8"));
+            BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(os, StandardCharsets.UTF_8));
             writer.write(params);
             writer.close();
             os.close();
@@ -128,7 +122,7 @@ public class NetatmoHttpClientImpl implements NetatmoHttpClient {
         }
     }
 
-    private String createParamsLine(Map<String, String> p) throws UnsupportedEncodingException {
+    private String createParamsLine(Map<String, String> p) {
         StringBuilder result = new StringBuilder();
         boolean first = true;
         if (p.size() > 0) for (Map.Entry<String, String> pair : p.entrySet()) {
@@ -138,7 +132,7 @@ public class NetatmoHttpClientImpl implements NetatmoHttpClient {
                 result.append("&");
             }
             if (pair.getValue() != null) {
-               result.append(URLEncoder.encode(pair.getKey(), "UTF-8")).append("=").append(URLEncoder.encode(pair.getValue(), "UTF-8"));
+               result.append(URLEncoder.encode(pair.getKey(), StandardCharsets.UTF_8)).append("=").append(URLEncoder.encode(pair.getValue(), StandardCharsets.UTF_8));
             }        
         }
 

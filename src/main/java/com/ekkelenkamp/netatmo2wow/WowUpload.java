@@ -11,6 +11,7 @@ import java.io.OutputStreamWriter;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.List;
 import java.util.TimeZone;
@@ -57,9 +58,9 @@ public class WowUpload {
      * @param siteId
      * @param awsPin
      * @return
-     * @throws Exception
+     * @throws IOException
      */
-    public long upload(List<Measures> measures, final String siteId, final int awsPin) throws Exception {
+    public long upload(List<Measures> measures, final String siteId, final int awsPin) throws IOException {
         dateFormat.setTimeZone(TimeZone.getTimeZone("GMT"));
         long lastUpload = previousTimeStep;
         int numberOfSuccesfulUploads = 0;
@@ -81,12 +82,12 @@ public class WowUpload {
 	            try 
 	            {
 	                setRequestParameters(connection, siteId, awsPin, softwareType, measure);
-	                log.debug(String.format("Start execution of WOW upload. URL=%s", connection.toString()));
+	                log.debug("Start execution of WOW upload. URL={}", connection);
 	                connection.connect();
 	                int responseCode = connection.getResponseCode();
 	                if (responseCode == HttpURLConnection.HTTP_OK) 
 	                {
-	                    log.debug(String.format("Successfully uploaded data for siteId %s.", siteId));
+	                    log.debug("Successfully uploaded data for siteId {}.", siteId);
 	                    numberOfSuccesfulUploads++;
 	                    if (measure.getTimestamp() > lastUpload)
 	                    {
@@ -95,7 +96,7 @@ public class WowUpload {
 	                } 
 	                else 
 	                {
-	                    log.warn(String.format("Invalid response code %d.", responseCode));
+	                    log.warn("Invalid response code {}.", responseCode);
 	                }
 	            } 
 	            finally 
@@ -105,7 +106,7 @@ public class WowUpload {
 	        }
         }
         
-        log.info("Number of new WOW measurements uploaded: " + numberOfSuccesfulUploads);
+        log.info("Number of new WOW measurements uploaded: {}", numberOfSuccesfulUploads);
         return lastUpload;
     }
 
@@ -120,28 +121,24 @@ public class WowUpload {
         requestBuilder.append(siteId);
         requestBuilder.append('&');
         requestBuilder.append("siteAuthenticationKey=");
-        requestBuilder.append(URLEncoder.encode(Integer.toString(awsPin), "utf-8"));
+        requestBuilder.append(URLEncoder.encode(Integer.toString(awsPin), StandardCharsets.UTF_8));
         requestBuilder.append('&');
         requestBuilder.append("softwaretype=");
-        requestBuilder.append(URLEncoder.encode(softwareType, "utf-8"));
+        requestBuilder.append(URLEncoder.encode(softwareType, StandardCharsets.UTF_8));
         
         for (String parameter : measure.getWowParameters().keySet()) 
         {
             requestBuilder.append('&');
             requestBuilder.append(parameter);
             requestBuilder.append('=');
-            requestBuilder.append(URLEncoder.encode(measure.getWowParameters().get(parameter), "utf-8"));
+            requestBuilder.append(URLEncoder.encode(measure.getWowParameters().get(parameter), StandardCharsets.UTF_8));
         }
         String parameterString = requestBuilder.toString();
-        log.info(String.format("Executing URL command: %s%s", urlString, parameterString));
-        OutputStream outputStream = null;
-        try {
-            outputStream = connection.getOutputStream();
-            BufferedWriter bufferedWriter = new BufferedWriter(new OutputStreamWriter(outputStream, "UTF-8"));
+        log.debug("Executing URL command: {}{}", urlString, parameterString);
+        try (OutputStream outputStream = connection.getOutputStream();
+        		BufferedWriter bufferedWriter = new BufferedWriter(new OutputStreamWriter(outputStream, StandardCharsets.UTF_8));) {
             bufferedWriter.write(parameterString);
             bufferedWriter.flush();
-        } finally {
-            if (outputStream != null) outputStream.close();
         }
     }
 

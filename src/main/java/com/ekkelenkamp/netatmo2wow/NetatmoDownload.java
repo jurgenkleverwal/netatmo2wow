@@ -9,26 +9,24 @@ import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 
-import java.io.IOException;
 import java.net.URL;
 import java.util.*;
 import java.util.Map.Entry;
 
 public class NetatmoDownload {
-
-
 	private NetatmoHttpClient netatmoHttpClient;
 	private NetatmoTokenFiles netatmoTokenFiles;
 	private String clientId;
 	private String clientSecret;
 
+	private static final String REFRESH_TOKEN = "refresh_token";
+	private static final String ACCESS_TOKEN = "access_token";
     static final Logger logger = LogManager.getLogger(NetatmoDownload.class);
-    static final long TIME_STEP_TOLERANCE = 2 * 60 * 1000;
+    static final long TIME_STEP_TOLERANCE = 2L * 60L * 1000L;
 
     // API URLs that will be used for requests, see: http://dev.netatmo.com/doc/restapi.
     protected static final String URL_BASE = "https://api.netatmo.net";
     protected static final String URL_REQUEST_TOKEN = URL_BASE + "/oauth2/token";
-    //protected static final String URL_GET_DEVICES_LIST = URL_BASE + "/api/devicelist";
     protected static final String URL_GET_MEASURES_LIST = URL_BASE + "/api/getmeasure";
     protected static final String URL_GET_STATION_DATA = URL_BASE + "/api/getstationsdata";
 
@@ -37,24 +35,24 @@ public class NetatmoDownload {
         this.netatmoTokenFiles = netatmoTokenFiles;
     }
 
-    public List<Measures> downloadMeasures(String clientId, String clientSecret, String timespan) throws IOException {
+    public List<Measures> downloadMeasures(String clientId, String clientSecret, String timespan) {
     	this.clientId = clientId;
     	this.clientSecret = clientSecret;
         
         String scale = "max";
         long timePeriod = Long.parseLong(timespan);
-        // netatmo calculates in seconds, not milliseconds.
         
+        // netatmo calculates in seconds, not milliseconds.
         long currentDate = ((new java.util.Date().getTime()) / 1000) - timePeriod;
-        logger.debug("start time: " + new Date(currentDate * 1000));
-        logger.debug("start time seconds: " + currentDate);
+        logger.debug("start time: {}", new Date(currentDate * 1000));
+        logger.debug("start time seconds: {}", currentDate);
         
         Device device = getDevicesAndRefreskTokenIfNeeded(netatmoTokenFiles.readToken(NetatmoTokenType.ACCESS));
-        List<Measures> measures = new ArrayList<Measures>();       
+        List<Measures> measures = new ArrayList<>();       
         Map<String, List<String>> devices = device.getDevices();
         
         String accessToken = netatmoTokenFiles.readToken(NetatmoTokenType.ACCESS);
-    	logger.debug("Access Token: " + accessToken);
+    	logger.debug("Access Token: {}", accessToken);
         
     	Double accumulatedRain = 0.0;
         for (Entry<String, List<String>> dev : devices.entrySet()) 
@@ -64,8 +62,8 @@ public class NetatmoDownload {
             
             for (String module : modules) 
             {
-                logger.debug("Device: " + device);
-                logger.debug("Module: " + module);
+                logger.debug("Device: {}", device);
+                logger.debug("Module: {}", module);
 
                 String moduleMeasureTypes = device.getModuleDataType(module);
                 
@@ -133,7 +131,7 @@ public class NetatmoDownload {
      */
     public List<Measures> mergeMeasures(List<Measures> measures, List<Measures> newMeasuresList, long timestepTolerance) {
 
-        List<Measures> result = new ArrayList<Measures>();
+        List<Measures> result = new ArrayList<>();
 
         for (Measures n : newMeasuresList) 
         {
@@ -144,7 +142,6 @@ public class NetatmoDownload {
                 {
                     n.merge(m);
                     mergedMeasure = true;
-                    continue;
                 }
             }
             if (mergedMeasure) 
@@ -158,8 +155,8 @@ public class NetatmoDownload {
     }
 
     public List<Measures> getMeasures(String token, String device, String module, String measureTypes, String scale, long dateBegin, String dateEnd) {
-        HashMap<String, String> params = new HashMap<String, String>();
-        params.put("access_token", token);
+        HashMap<String, String> params = new HashMap<>();
+        params.put(ACCESS_TOKEN, token);
         params.put("device_id", device);
         if (module != null) 
         {
@@ -176,7 +173,7 @@ public class NetatmoDownload {
         params.put("date_begin", "" + dateBegin);        	
         params.put("optimize", "false"); // easy parsing.
 
-        List<Measures> measuresList = new ArrayList<Measures>();
+        List<Measures> measuresList = new ArrayList<>();
         try 
         {
             JSONParser parser = new JSONParser();
@@ -234,8 +231,8 @@ public class NetatmoDownload {
 
     public Device getDevicesAndRefreskTokenIfNeeded(String token) {
         Device device = new Device();
-        HashMap<String, String> params = new HashMap<String, String>();
-        params.put("access_token",token);
+        HashMap<String, String> params = new HashMap<>();
+        params.put(ACCESS_TOKEN,token);
         
         try 
         {
@@ -247,7 +244,7 @@ public class NetatmoDownload {
             if (body == null)
             {
             	token = refreshTokens();
-            	params.put("access_token",token);
+            	params.put(ACCESS_TOKEN,token);
             	result = netatmoHttpClient.post(new URL(URL_GET_STATION_DATA), params);
                 obj = parser.parse(result);
                 jsonResult = (JSONObject) obj;
@@ -267,7 +264,8 @@ public class NetatmoDownload {
             		JSONArray dataTypes = (JSONArray) module.get("data_type");
             		if (!dataTypes.isEmpty()) 
             		{
-            			String joinedDataTypes = String.join(",", dataTypes);  
+            			@SuppressWarnings("unchecked")
+						String joinedDataTypes = String.join(",", dataTypes);  
             			if (joinedDataTypes.equals("Wind"))
             			{
             				joinedDataTypes = "WindStrength,WindAngle,GustStrength,GustAngle";
@@ -289,9 +287,9 @@ public class NetatmoDownload {
     {
     	String newAccessToken = null;
     	String refreshToken = netatmoTokenFiles.readToken(NetatmoTokenType.REFRESH);
-    	HashMap<String, String> params = new HashMap<String, String>();
-        params.put("grant_type", "refresh_token");
-        params.put("refresh_token", refreshToken);
+    	HashMap<String, String> params = new HashMap<>();
+        params.put("grant_type", REFRESH_TOKEN);
+        params.put(REFRESH_TOKEN, refreshToken);
         params.put("client_id", clientId);
         params.put("client_secret", clientSecret);
         try {
@@ -299,17 +297,17 @@ public class NetatmoDownload {
             String result = netatmoHttpClient.post(new URL(URL_REQUEST_TOKEN), params);
             Object obj = parser.parse(result);
             JSONObject jsonResult = (JSONObject) obj;
-            newAccessToken = (String) jsonResult.get("access_token");
-            String newRefreshToken = (String) jsonResult.get("refresh_token");
+            newAccessToken = (String) jsonResult.get(ACCESS_TOKEN);
+            String newRefreshToken = (String) jsonResult.get(REFRESH_TOKEN);
             Long expiresIn = (Long) jsonResult.get("expires_in");
             if(newAccessToken != null && !newAccessToken.isEmpty())
             	netatmoTokenFiles.writeToken(NetatmoTokenType.ACCESS, newAccessToken);
             if(newRefreshToken != null && !newRefreshToken.isEmpty())
             	netatmoTokenFiles.writeToken(NetatmoTokenType.REFRESH, newRefreshToken);
-            logger.debug("new access_token expires in " + expiresIn.intValue() + " seconds");
+            logger.info("Refreshed access_token. New access_token expires in {} seconds", expiresIn.intValue());
         } catch (Exception e) {
             throw new RuntimeException(e);
-        }    
+        }
         return newAccessToken;
     }
 }

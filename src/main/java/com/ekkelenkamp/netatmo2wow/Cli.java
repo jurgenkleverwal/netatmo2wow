@@ -4,7 +4,6 @@ package com.ekkelenkamp.netatmo2wow;
 import com.ekkelenkamp.netatmo2wow.model.Measures;
 import org.apache.commons.cli.*;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.prefs.Preferences;
 
@@ -78,26 +77,21 @@ public class Cli {
         String propertyValue = prefs.get(PREF_NAME, "0");
         previousTimestepRead = Long.parseLong(propertyValue);
 
-        logger.debug("Previous time was: " + new java.util.Date(previousTimestepRead));
+        logger.debug("Previous time was: {}", new java.util.Date(previousTimestepRead));
         NetatmoTokenFiles netatmoTokenFiles = new NetatmoTokenFiles(cmd.getOptionValue("l"));
         NetatmoDownload download = new NetatmoDownload(netatmoHttpClient, netatmoTokenFiles);
         try 
         {
             List<Measures> measures = download.downloadMeasures(cmd.getOptionValue("c"), cmd.getOptionValue("s"), cmd.getOptionValue("t"));
-            logger.info("Number of Netatmo measurements read: " + measures.size());
+            logger.info("Number of Netatmo measurements read: {}", measures.size());
             if (!measures.isEmpty()) 
             {
-                logger.debug("First measurement: " + measures.get(0));
-                logger.debug("Last measurement: " + measures.get(measures.size() - 1));
+                logger.debug("First measurement: {}", measures.get(0));
+                logger.debug("Last measurement: {}", measures.get(measures.size() - 1));
             }
             WowUpload wowClient = new WowUpload(previousTimestepRead);
             long lastTimestepRed = wowClient.upload(measures, cmd.getOptionValue("i"), Integer.parseInt(cmd.getOptionValue("a")));
             prefs.put(PREF_NAME, "" + lastTimestepRed);
-
-        } 
-        catch (IOException e) 
-        {
-            throw new RuntimeException(e);
         } 
         catch (Exception e) 
         {
